@@ -154,27 +154,29 @@ def get_all_fields(mongo_ip,client_name,document_id):
 
 def get_field_xml(field,xml_data,print_flag=False):
 
-    label_and_value = ast.literal_eval(field['value'])
+    print(field)
+    if not field['type']=='table' :
+        label_and_value = ast.literal_eval(field['value'])
 
-    if len(field['children']) > 0:
-        for child in field['children']:
-            b = ET.SubElement(xml_data, 'field')
-            get_field_xml(child,b,print_flag=False)
+        if len(field['children']) > 0:
+            for child in field['children']:
+                b = ET.SubElement(xml_data, 'field')
+                get_field_xml(child,b,print_flag=False)
 
-    if field['type'] == "Key-value pair":
-        value_word = label_and_value[1]['key']
-
-    elif field['type'] == "group_frame" :
-        if (len(label_and_value)==2) :
+        if field['type'] == "Key-value pair":
             value_word = label_and_value[1]['key']
+
+        elif field['type'] == "group_frame" :
+            if (len(label_and_value)==2) :
+                value_word = label_and_value[1]['key']
+            else:
+                value_word = label_and_value[0]['key']
+
         else:
             value_word = label_and_value[0]['key']
 
-    else:
-        value_word = label_and_value[0]['key']
-
-    xml_data.set('value',value_word)
-    xml_data.set('tag',field['tag'])
+        xml_data.set('value',value_word)
+        xml_data.set('tag',field['tag'])
 
     return xml_data
 
@@ -445,18 +447,27 @@ def format_xml_tag_for_table(tags):
     return ','.join(tags)
 
 
-def fetch_table_row_xml_data(inside_table_data,headers,type='row'):
-    inside_table_xml=''                  # Pass this to function
+def fetch_table_row_xml_data(inside_table_data,headers, inside_table_xml, type='row'):
+    # inside_table_xml=''                  # Pass this to function
     # inside_table_xml = ET.Element('tableRow')
     for enum,each_itter_data in enumerate(inside_table_data):
         each_itter_data=check_tag_key(each_itter_data)
+
         if type=='row':
-            inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
-            # inside_table_xml.set('tags',format_xml_tag_for_table(each_itter_data['tag'])
-            inside_table_xml+=fetch_table_row_xml_data(each_itter_data['cells'],headers,type='column')
-            inside_table_xml+='</tableRow>'
+            # inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
+            b = ET.SubElement(inside_table_xml, 'tableRow')
+            b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
+            fetch_table_row_xml_data(each_itter_data['cells'], headers, inside_table_xml,
+                                                         type='column')
+
         elif type=='column':
-            inside_table_xml+='<tableCell value="'+each_itter_data['value']+'" tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'" column="'+headers[enum]+'"/>'
+            b = ET.SubElement(inside_table_xml, 'tableCell')
+            # inside_table_xml += '<tableCell value="' + each_itter_data['value'] + '" tags="' + format_xml_tag_for_table(
+            #     each_itter_data['tag']) + '" column="' + headers[enum] + '"/>'
+
+            b.set('value', each_itter_data['value'])
+            b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
+            b.set('column', headers[enum])
 
     return inside_table_xml
 
@@ -475,26 +486,32 @@ def check_table_for_headers(first_row):
 
 
 def create_txtNodes_for_table(all_tables_list):
+
     if len(all_tables_list)<1:
         return "<all_tables />"
-    table_data_xml='<all_tables>'
-    for each_table in all_tables_list:
-        # print('#'*30)
-        table_data_xml+='<table label="'+str(each_table['label'])+'">'
-        # Add root_table = ET.Element('table',)
-        # root_table.set('label',str(each_table['label'])
 
-        hasHeaders,headers=check_table_for_headers(each_table['tableRows'][0])
-        if hasHeaders:
-            table_data_xml+=fetch_table_row_xml_data(each_table['tableRows'][1:],headers)
-        else:
-            table_data_xml+=fetch_table_row_xml_data(each_table['tableRows'],headers)
+    else :
+        table_data_xml='<all_tables>'
+        for each_table in all_tables_list:
+            # print('#'*30)
+            # table_data_xml+='<table label="'+str(each_table['label'])+'">'
+            # table_data_xml = ''
+            inside_table_xml = ET.Element('table')
+            inside_table_xml.set('label', str(each_table['label']))
 
-        table_data_xml+='</table>'
+            hasHeaders,headers=check_table_for_headers(each_table['tableRows'][0])
 
-    table_data_xml+='</all_tables>'
-    # print("all tables")
-    # print(table_data_xml)
+            # inside_table_xml = ET.Element()
+            if hasHeaders:
+                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'][1:],headers, inside_table_xml=inside_table_xml)).decode('utf-8')
+            else:
+                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'],headers, inside_table_xml=inside_table_xml)).decode('utf-8')
+
+            # table_data_xml+='</table>'
+
+        table_data_xml+='</all_tables>'
+        # print("all tables")
+        # print(table_data_xml)
 
     return table_data_xml
 
@@ -551,16 +568,6 @@ def combine_json_parse_xml( document_id):
     f.write(final_data_xml)
     f.close()
 
-    # print(data)
-    #
-    # xml = dicttoxml.dicttoxml(data)
-    # xml_decoded = xml.decode()
-    # print(xml_decoded)
-    # xml_bytes = bytes(parseString(xml_decoded).toprettyxml(indent=' ' * 4), 'utf-8')
-    # save_info="/home/amandubey/Documents/All Output Images/ami xml data/"
-    # with open(save_info+str(len(os.listdir(save_info))) + "_data.xml", "wb") as fs:
-    #     fs.write(xml_bytes)
-
 
 if __name__ == '__main__':
     # a={'as':['wq','ew','2332','asad','lsakd']}
@@ -568,7 +575,8 @@ if __name__ == '__main__':
     # exit()
     # uploadpath = sys.argv[1]
     # uploadpath = "/home/amandubey/Downloads/5c530a120ed0a632bcaf797c/"
-    doc_id="5d43de726f23737fdfd63cc3"
+    # doc_id="5d43de726f23737fdfd63cc3"
+    doc_id="5d427bc96f237378706564e4"
     combine_json_parse_xml(doc_id)
     print("success")
 
