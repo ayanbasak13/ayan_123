@@ -112,14 +112,16 @@ def collect_all_fileds(page_id,fields):
         all_fields[page_id+'_'+each_data['_id']]=each_data
 
 
-
 def create_relation_fields(all_fields,relationship_pairs):
     poped_ids=[]
     field_list=[]
     for key_enum,tree_relation in relationship_pairs.items():
         for child_id in tree_relation['child']:
+
             all_fields[tree_relation['parent']]['children'].append(all_fields[child_id])
             poped_ids.append(child_id)
+
+
 
     for popid in poped_ids:
         all_fields.pop(popid)
@@ -147,6 +149,7 @@ def get_all_fields(mongo_ip,client_name,document_id):
 
     field_list=create_relation_fields(all_fields,relationship_pairs)
 
+
     return field_list
 
 
@@ -154,7 +157,7 @@ def get_all_fields(mongo_ip,client_name,document_id):
 
 
 
-def fetch_table_row_xml_data_for_fields(inside_table_data,headers, inside_table_xml, type='row'):
+def fetch_table_row_xml_data_for_fields(inside_table_data,headers, column_data, inside_table_xml, type='row'):
     # inside_table_xml=''                  # Pass this to function
     # inside_table_xml = ET.Element('tableRow')
     for enum,each_itter_data in enumerate(inside_table_data):
@@ -164,20 +167,19 @@ def fetch_table_row_xml_data_for_fields(inside_table_data,headers, inside_table_
             # inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
             b = ET.SubElement(inside_table_xml, 'tableRow')
             b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
-            fetch_table_row_xml_data(each_itter_data['cells'], headers, b,
-                                                         type='column')
+            fetch_table_row_xml_data(each_itter_data['cells'], headers, column_data, b, type='column')
 
+        # Not required
         elif type=='column':
             b = ET.SubElement(inside_table_xml, 'tableCell')
             # inside_table_xml += '<tableCell value="' + each_itter_data['value'] + '" tags="' + format_xml_tag_for_table(
             #     each_itter_data['tag']) + '" column="' + headers[enum] + '"/>'
 
             b.set('value', each_itter_data['value'])
-            b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
+            b.set('tags', format_xml_tag_for_table(column_data[enum]['tag']))
             b.set('column', headers[enum])
 
     return inside_table_xml
-
 
 
 # Helper function to extract specific attributes according to field type for xml string
@@ -185,20 +187,19 @@ def fetch_table_row_xml_data_for_fields(inside_table_data,headers, inside_table_
 
 def get_field_xml(field,xmd,print_flag=False):
 
-
     if field['type'] == 'table':
 
-        tag = ','.join(i for i in field['tag'])
+        tag = ','.join(field['tag'])
         xmd.set('tag', tag)
         xml_data = ET.SubElement(xmd, 'table')
 
         hasHeaders, headers = check_table_for_headers(field['tableRows'][0])
 
         if hasHeaders:
-            fetch_table_row_xml_data_for_fields(field['tableRows'][1:], headers,
+            fetch_table_row_xml_data_for_fields(field['tableRows'][1:], headers, field['tableCols'],
                                                       inside_table_xml=xml_data)
         else:
-            fetch_table_row_xml_data_for_fields(field['tableRows'], headers,
+            fetch_table_row_xml_data_for_fields(field['tableRows'], headers, field['tableCols'],
                                                   inside_table_xml=xml_data)
 
         if len(field['children']) > 0:
@@ -388,7 +389,7 @@ def get_attributes(field, label_and_value):
 
     #######################################################
 
-    elif field['type'] == "":  # Standalone
+    elif field['type'] == "Standalone":  # Standalone
         value_word = label_and_value[0]['key']
         label_word = ""
 
@@ -396,97 +397,102 @@ def get_attributes(field, label_and_value):
 
 
 def create_textline_level_txtNodes(page_structure,tables_list,fields_list):
-    finalised_page_structures="<all_txtNodes>"
-    textline_coordinates=[0,0,0,0]
-    for textline in page_structure:
-        is_finalised_page_structures=True
-        textline_coordinates[0] = (textline.coordinates[0][1])
-        textline_coordinates[1] = (textline.coordinates[0][0])
-        textline_coordinates[2] = (textline.coordinates[1][1])
-        textline_coordinates[3] = (textline.coordinates[1][0])
-        list_o_fields = []
-        popped = []
 
-        for each_table in tables_list:
-            if is_coordinates_overlapping(textline_coordinates,get_page_coordinates_from_coordinates_data(each_table['coordinates'])):
-                is_finalised_page_structures=False
+    if len(page_structure)<1 :
+        return "<all_txtNodes />"
 
-        if is_finalised_page_structures:
-            if str(textline)=="(2) Total Gas Cost":
-                print('"(2) Total Gas Cost"')
+    else :
 
-            text_root = ET.Element('txtNode')
-            textline_print_flag=False
+        finalised_page_structures="<all_txtNodes>"
+        textline_coordinates=[0,0,0,0]
+        for textline in page_structure:
+            is_finalised_page_structures=True
+            textline_coordinates[0] = (textline.coordinates[0][1])
+            textline_coordinates[1] = (textline.coordinates[0][0])
+            textline_coordinates[2] = (textline.coordinates[1][1])
+            textline_coordinates[3] = (textline.coordinates[1][0])
+            list_o_fields = []
+            popped = []
 
-            for k,e_f in enumerate(fields_list) :
+            for each_table in tables_list:
+                if is_coordinates_overlapping(textline_coordinates,get_page_coordinates_from_coordinates_data(each_table['coordinates'])):
+                    is_finalised_page_structures=False
 
-                if is_coordinates_overlapping(textline_coordinates,get_page_coordinates_from_coordinates_data(e_f['coordinate'])):
-                    has_label=False
-                    list_o_fields.append(e_f)
-                    popped.append(k)
+            if is_finalised_page_structures:
+                if str(textline)=="SPRINGFIELD, OH 45502-9339":
+                    print('"Zipcode"')
 
-            if len(list_o_fields) == 1:
-                # If the particular field(each_field) exactly matches with the text line
-                label_and_value = ast.literal_eval(list_o_fields[0]['value'])
-                lis = get_attributes(list_o_fields[0], label_and_value)
+                text_root = ET.Element('txtNode')
+                textline_print_flag=False
 
-                has_label = lis[0]
-                value_word = lis[1]
-                label_word = lis[2]
 
-                if not lev.normalized_damerau_levenshtein_distance(value_word, str(textline)) and (len(list_o_fields) == 1):
-                    fetch_textline_xml_data(value_word=value_word, tag=list_o_fields[0]['tag'],
-                                                  label_word=label_word, has_label=has_label, text_root=text_root)
-                    # fps = fps.tostring(text_root).decode("utf-8")
-                    # finalised_page_structures += fps
-                    textline_print_flag = True
+                for k,e_f in enumerate(fields_list) :
 
-                else :
-                    if not textline_print_flag:
-                        # finalised_page_structures+=fetch_textline_xml_data_with_children(value_word=str(textline),tag="",text_root=text_root)
-                        text_root = fetch_textline_xml_data_with_children(value_word=str(textline), tag="",
-                                                                          text_root=text_root)
-                        textline_print_flag = True
+                    if is_coordinates_overlapping(textline_coordinates,get_page_coordinates_from_coordinates_data(e_f['coordinate'])):
+                        has_label=False
+                        list_o_fields.append(e_f)
+                        popped.append(k)
 
-                    b = ET.SubElement(text_root, 'txtNode')
-                    fetch_textline_xml_data(value_word=value_word, tag=list_o_fields[0]['tag'],
-                                            label_word=label_word, has_label=has_label, text_root=b)
-
-                fps = ET.tostring(text_root).decode("utf-8")
-                finalised_page_structures+= fps
-
-            if len(list_o_fields) > 1 :
-
-                text_root = fetch_textline_xml_data_with_children(value_word=str(textline), tag="", text_root=text_root)
-
-                for each_field in list_o_fields :
-                    label_and_value = ast.literal_eval(each_field['value'])
+                if len(list_o_fields) == 1:
+                    # If the particular field(each_field) exactly matches with the text line
+                    label_and_value = ast.literal_eval(list_o_fields[0]['value'])
                     lis = get_attributes(list_o_fields[0], label_and_value)
 
                     has_label = lis[0]
                     value_word = lis[1]
                     label_word = lis[2]
 
-                    b = ET.SubElement(text_root,'txtNode')
-                    fetch_textline_xml_data(value_word=value_word,tag=each_field['tag'],
-                                                             label_word=label_word,has_label=has_label, text_root=b)
+                    if not lev.normalized_damerau_levenshtein_distance(value_word, str(textline)) and (len(list_o_fields) == 1):
+                        fetch_textline_xml_data(value_word=value_word, tag=list_o_fields[0]['tag'],
+                                                      label_word=label_word, has_label=has_label, text_root=text_root)
 
-                fps = ET.tostring(text_root).decode("utf-8")
-                finalised_page_structures+= fps
+                        textline_print_flag = True
 
-                for kp in popped:
-                    fields_list.pop(kp)
+                    else :
+                        if not textline_print_flag:
+                            text_root = fetch_textline_xml_data_with_children(value_word=str(textline), tag="",
+                                                                              text_root=text_root)
+                            textline_print_flag = True
+
+                        b = ET.SubElement(text_root, 'txtNode')
+                        fetch_textline_xml_data(value_word=value_word, tag=list_o_fields[0]['tag'],
+                                                label_word=label_word, has_label=has_label, text_root=b)
+
+                    fps = ET.tostring(text_root).decode("utf-8")
+                    finalised_page_structures+= fps
+
+                if len(list_o_fields) > 1 :
+
+                    text_root = fetch_textline_xml_data_with_children(value_word=str(textline), tag="", text_root=text_root)
+
+                    for each_field in list_o_fields :
+                        label_and_value = ast.literal_eval(each_field['value'])
+                        lis = get_attributes(list_o_fields[0], label_and_value)
+
+                        has_label = lis[0]
+                        value_word = lis[1]
+                        label_word = lis[2]
+
+                        b = ET.SubElement(text_root,'txtNode')
+                        fetch_textline_xml_data(value_word=value_word,tag=each_field['tag'],
+                                                                 label_word=label_word,has_label=has_label, text_root=b)
+
+                    fps = ET.tostring(text_root).decode("utf-8")
+                    finalised_page_structures+= fps
+
+                    for kp in popped:
+                        fields_list.pop(kp)
 
 
-            #Logic if no field present in textline
-            if not textline_print_flag:
-                fps = fetch_textline_xml_data(value_word=str(textline), tag="", text_root=text_root)
-                fps = fps.tostring(text_root).decode("utf-8")
-                finalised_page_structures += fps
+                #Logic if no field present in textline
+                if not textline_print_flag:
+                    fps = fetch_textline_xml_data(value_word=str(textline), tag="", text_root=text_root)
+                    fps = fps.tostring(text_root).decode("utf-8")
+                    finalised_page_structures += fps
 
-    finalised_page_structures+='</all_txtNodes>'
+        finalised_page_structures+='</all_txtNodes>'
 
-    return finalised_page_structures
+        return finalised_page_structures
 
 
 def check_tag_key(data_dict):
@@ -499,7 +505,7 @@ def format_xml_tag_for_table(tags):
     return ','.join(tags)
 
 
-def fetch_table_row_xml_data(inside_table_data,headers, inside_table_xml, type='row'):
+def fetch_table_row_xml_data(inside_table_data,headers, column_data, inside_table_xml, type='row'):
     # inside_table_xml=''                  # Pass this to function
     # inside_table_xml = ET.Element('tableRow')
     for enum,each_itter_data in enumerate(inside_table_data):
@@ -509,13 +515,13 @@ def fetch_table_row_xml_data(inside_table_data,headers, inside_table_xml, type='
             # inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
             b = ET.SubElement(inside_table_xml, 'tableRow')
             b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
-            fetch_table_row_xml_data(each_itter_data['cells'], headers, b, type='column')
+            fetch_table_row_xml_data(each_itter_data['cells'], headers, column_data, b, type='column')
 
         elif type=='column':
             c = ET.SubElement(inside_table_xml, 'tableCell')
 
             c.set('value', each_itter_data['value'])
-            c.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
+            c.set('tags', format_xml_tag_for_table(column_data[enum]['tag']))
             c.set('column', headers[enum])
 
     return inside_table_xml
@@ -546,15 +552,15 @@ def create_txtNodes_for_table(all_tables_list):
             # table_data_xml+='<table label="'+str(each_table['label'])+'">'
             # table_data_xml = ''
             inside_table_xml = ET.Element('table')
-            inside_table_xml.set('label', str(each_table['label']))
+            inside_table_xml.set('label', str(','.join(each_table['tag'])))
 
             hasHeaders,headers=check_table_for_headers(each_table['tableRows'][0])
 
             # inside_table_xml = ET.Element()
             if hasHeaders:
-                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'][1:],headers, inside_table_xml=inside_table_xml)).decode('utf-8')
+                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'][1:],headers, each_table['tableCols'], inside_table_xml=inside_table_xml)).decode('utf-8')
             else:
-                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'],headers, inside_table_xml=inside_table_xml)).decode('utf-8')
+                table_data_xml+= ET.tostring(fetch_table_row_xml_data(each_table['tableRows'],headers,  each_table['tableCols'], inside_table_xml=inside_table_xml)).decode('utf-8')
 
             # table_data_xml+='</table>'
 
@@ -576,7 +582,7 @@ def fetch_page_level_info(mongo_ip,client_name,document_id,image_path="/home/ama
 
     xml_list=[]
     for enum,each_page in enumerate(all_document_related_pages_info):
-        each_page_xml='<Page page_number="'+str(int(each_page['path'][-5])+1)+'">'
+        each_page_xml='<Page page_number="'+str(int(each_page['path'].split('_')[-1].split('.')[0])+1)+'">'
 
         for each_field in all_document_related_fields:
             if each_field['path']==each_page['path']:
@@ -611,6 +617,10 @@ def combine_json_parse_xml( document_id):
     final_data_xml+=fetch_page_level_info(mongo_ip,client_name,document_id)
     final_data_xml+='</root>'
 
+    f = open("/Users/ayanbask/Desktop/IDP/all_data.xml", "w")
+    f.write(final_data_xml)
+    f.close()
+
     print('final_data_xml')
     print(final_data_xml)
     f=open("xml_data.xml",'w')
@@ -625,7 +635,7 @@ if __name__ == '__main__':
     # uploadpath = sys.argv[1]
     # uploadpath = "/home/amandubey/Downloads/5c530a120ed0a632bcaf797c/"
     # doc_id="5d43de726f23737fdfd63cc3"
-    doc_id="5d427bc96f237378706564e4"
+    doc_id="5d427ba96f237378706564e2"
     combine_json_parse_xml(doc_id)
     print("success")
 
