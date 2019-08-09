@@ -140,13 +140,10 @@ def get_all_fields(mongo_ip,client_name,document_id):
     relations = list(db.pageRelations.find({"document_id": document_id}))
     fields = list(db.fields.find({"documentId": document_id}))
 
-    print('Fields',fields)
-    print('Relations', relations)
     for enum,val in enumerate(relations):
         collect_children(val["page_id"],val["relations"])
 
     clean_relationship_pairs(relationship_pairs)
-    print('Relationship Pairs', relationship_pairs)
     for enum,val in enumerate(fields):
         collect_all_fileds(val["pageId"],val['fields'])
     for enum,val in enumerate(fields):
@@ -187,49 +184,82 @@ def fetch_table_row_xml_data_for_fields(inside_table_data,headers, column_data, 
 
 
 
-def get_field_xml_same_child_table(child, inside_table_data,headers, column_data, inside_table_xml, type='row'):
+# def get_field_xml_same_child_table(child, inside_table_data,headers, column_data, inside_table_xml, type='row'):
+#
+#     for enum,each_itter_data in enumerate(inside_table_data):
+#         each_itter_data=check_tag_key(each_itter_data)
+#
+#         if type=='row':
+#             # inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
+#             b = ET.SubElement(inside_table_xml, 'tableRow')
+#             b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
+#             fetch_table_row_xml_data(each_itter_data['cells'], headers, column_data, b, type='column')
+#
+#         # Not required
+#         elif type=='column':
+#             b = ET.SubElement(inside_table_xml, 'tableCell')
+#             # inside_table_xml += '<tableCell value="' + each_itter_data['value'] + '" tags="' + format_xml_tag_for_table(
+#             #     each_itter_data['tag']) + '" column="' + headers[enum] + '"/>'
+#
+#             b.set('value', each_itter_data['value'])
+#             b.set('tags', format_xml_tag_for_table(column_data[enum]['tag']))
+#             b.set('column', headers[enum])
+#
+#         if len(child['children']) > 0:
+#             for ch in child['children']:
+#
+#                 if ch['type'] == 'table' :
+#
+#                     hasHeaders, headers = check_table_for_headers(child['tableRows'][0])
+#
+#                     if hasHeaders:
+#                         get_field_xml_same_child_table(ch, ch['tableRows'][1:], headers, child['tableCols'],
+#                                                             inside_table_xml=inside_table_xml)
+#                     else:
+#                         get_field_xml_same_child_table(ch, ch['tableRows'], headers, child['tableCols'],
+#                                                             inside_table_xml=inside_table_xml)
+#                     # print('---')
+#
+#                 else :
+#                     b = ET.SubElement(inside_table_xml, 'field')
+#                     get_field_xml(child,b,print_flag=False)
+#
+#
+#     return inside_table_xml
 
-    for enum,each_itter_data in enumerate(inside_table_data):
-        each_itter_data=check_tag_key(each_itter_data)
-
-        if type=='row':
-            # inside_table_xml+='<tableRow tags="'+format_xml_tag_for_table(each_itter_data['tag'])+'">'
-            b = ET.SubElement(inside_table_xml, 'tableRow')
-            b.set('tags', format_xml_tag_for_table(each_itter_data['tag']))
-            fetch_table_row_xml_data(each_itter_data['cells'], headers, column_data, b, type='column')
-
-        # Not required
-        elif type=='column':
-            b = ET.SubElement(inside_table_xml, 'tableCell')
-            # inside_table_xml += '<tableCell value="' + each_itter_data['value'] + '" tags="' + format_xml_tag_for_table(
-            #     each_itter_data['tag']) + '" column="' + headers[enum] + '"/>'
-
-            b.set('value', each_itter_data['value'])
-            b.set('tags', format_xml_tag_for_table(column_data[enum]['tag']))
-            b.set('column', headers[enum])
-
-        if len(child['children']) > 0:
-            for ch in child['children']:
-
-                if ch['type'] == 'table' :
-
-                    hasHeaders, headers = check_table_for_headers(child['tableRows'][0])
-
-                    if hasHeaders:
-                        get_field_xml_same_child_table(ch, ch['tableRows'][1:], headers, child['tableCols'],
-                                                            inside_table_xml=inside_table_xml)
-                    else:
-                        get_field_xml_same_child_table(ch, ch['tableRows'], headers, child['tableCols'],
-                                                            inside_table_xml=inside_table_xml)
-                    # print('---')
-
-                else :
-                    b = ET.SubElement(inside_table_xml, 'field')
-                    get_field_xml(child,b,print_flag=False)
 
 
-    return inside_table_xml
 
+def get_field_xml_same_child_table(child1,xml_data,xmd,print_flag=False) :
+
+    hasHeaders, headers = check_table_for_headers(child1['tableRows'][0])
+
+    if hasHeaders:
+        fetch_table_row_xml_data_for_fields(child1['tableRows'][1:], headers, child1['tableCols'],
+                                            inside_table_xml=xml_data)
+    else:
+        fetch_table_row_xml_data_for_fields(child1['tableRows'], headers, child1['tableCols'],
+                                            inside_table_xml=xml_data)
+
+    if len(child1['children']) > 0:
+        for child in child1['children']:
+
+            if child['type'] != 'table':
+
+                b = ET.SubElement(xmd, 'field')
+                get_field_xml(child, b, print_flag=False)
+
+            else:
+
+                hasHeaders, headers = check_table_for_headers(child['tableRows'][0])
+
+                if hasHeaders:
+                    get_field_xml_same_child_table(child, xml_data, xmd)
+                else:
+                    get_field_xml_same_child_table(child, xml_data, xmd)
+
+
+    return xml_data
 
 
 # Helper function to extract specific attributes according to field type for xml string
@@ -265,17 +295,9 @@ def get_field_xml(field,xmd,print_flag=False):
                     hasHeaders, headers = check_table_for_headers(child['tableRows'][0])
 
                     if hasHeaders:
-                        get_field_xml_same_child_table(child, child['tableRows'][1:], headers, child['tableCols'],
-                                                            inside_table_xml=xml_data)
+                        get_field_xml_same_child_table(child, xml_data, xmd)
                     else:
-                        get_field_xml_same_child_table(child, child['tableRows'], headers, child['tableCols'],
-                                                            inside_table_xml=xml_data)
-
-                    # if hasHeaders:
-                    #     get_field_xml_same_child_table(child, xml_data, print_flag=False)
-                    # else:
-                    #     get_field_xml_same_child_table(child, child['tableRows'], headers, child['tableCols'],
-                    #                                         inside_table_xml=xml_data)
+                        get_field_xml_same_child_table(child, xml_data, xmd)
 
 
     else :
@@ -668,8 +690,8 @@ def fetch_page_level_info(mongo_ip,client_name,document_id,image_path="/home/ama
             if each_field['path']==each_page['path']:
                 page_related_fields=each_field
                 break
-        page_image=cv2.imread('/Users/ayanbask/Desktop/IDP/flower_image.jpg')
-        # page_image=cv2.imread(image_path+'/'+each_page['path'])
+        # page_image=cv2.imread('/Users/ayanbask/Desktop/IDP/flower_image.jpg')
+        page_image=cv2.imread(image_path+'/'+each_page['path'])
         page_structure=get_textlines(each_page,page_image)
         each_page_xml +=create_textline_level_txtNodes(page_structure,page_related_fields['tables'],page_related_fields['fields'])
         each_page_xml+=create_txtNodes_for_table(page_related_fields['tables'])
@@ -684,8 +706,8 @@ def fetch_page_level_info(mongo_ip,client_name,document_id,image_path="/home/ama
 def combine_json_parse_xml(uploadpath):
     data_list = []
     data = {}
-    # document_id=uploadpath.split('/')[-1]
-    document_id='5d4c1c551f28e46a8f4e2df5'
+    document_id=uploadpath.split('/')[-1]
+    # document_id='5d4c1c551f28e46a8f4e2df5'
 
 
     # final_data_xml -> Final structured xml string
@@ -696,19 +718,16 @@ def combine_json_parse_xml(uploadpath):
     final_data_xml+=format_fields_for_xml(data['all_Fields'])
     final_data_xml+=fetch_page_level_info(mongo_ip,client_name,document_id,uploadpath)
     final_data_xml+='</root>'
-    print('final_data_xml')
-    print(final_data_xml)
-    exit()
     f = open(uploadpath+"/data.xml", "w")
     f.write(final_data_xml)
     f.close()
 
 
 if __name__ == '__main__':
-    # uploadpath = sys.argv[1]
-    uploadpath = "/home/amandubey/Downloads/5d4a81b71f28e43b0387eed9"
+    uploadpath = sys.argv[1]
+    # uploadpath = "/home/amandubey/Downloads/5d4a81b71f28e43b0387eed9"
     # doc_id=uploadpath.split('/')[-1]
     combine_json_parse_xml(uploadpath)
-    print("success")
+    # print("success")
 
 # paragraphs_text = detect_paragraph(img, evidence, 1.5,False,2)
